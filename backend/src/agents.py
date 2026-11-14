@@ -17,6 +17,7 @@ class ResearchState(TypedDict):
     user_id: str
     query: str
     user_context: str
+    intent: str  # "greeting" vs "research"
     plan: List[str]
     retrieved_chunks: List[Dict[str, Any]]
     draft_report: str
@@ -31,14 +32,64 @@ CHAT_MODEL = "gemini-3.5-flash"
 retriever = PolicyRetriever()
 lt_memory = LongTermMemory()
 
+# --- NODE 0: Supervisor / Router Agent (Pattern: Router Pattern) ---
+def supervisor_router_node(state: ResearchState) -> Dict[str, Any]:
+    print("\n🧭 [Supervisor / Router]: Classifying user intent...")
+    query = state["query"].strip()
+    user_summary = lt_memory.get_user_memory_summary(state["user_id"])
+
+    prompt = f"""You are the Supervisor Router for the Pakistan Policy Impact Analyst.
+Analyze the user's input: "{query}"
+
+Classify into one of two categories:
+1. "greeting": Simple greetings (e.g., 'hi', 'hello', 'who are you', 'how can you help me', 'thanks') or casual chat that does NOT require economic document research.
+2. "research": Questions about Pakistan economy, GDP, inflation, monetary policy, SBP, taxes, debt, etc.
+
+Respond ONLY with valid JSON:
+{{
+  "intent": "greeting" or "research",
+  "reply": "If greeting, friendly welcome message introducing yourself as the Pakistan Policy Impact Analyst and suggesting 2 sample economic queries. If research, leave empty."
+}}
+"""
+    response = ai_client.models.generate_content(
+        model=CHAT_MODEL,
+        contents=prompt
+    )
+
+    text = response.text.strip()
+    if text.startswith("```json"):
+        text = text[7:-3].strip()
+    elif text.startswith("```"):
+        text = text[3:-3].strip()
+
+    try:
+        decision = json.loads(text)
+        intent = decision.get("intent", "research")
+        reply = decision.get("reply", "")
+    except Exception:
+        intent = "research"
+        reply = ""
+
+    print(f"  🎯 Intent classified as: {intent}")
+    return {
+        "intent": intent,
+        "final_response": reply,
+        "user_context": user_summary
+    }
+
+# --- Router Conditional Edge ---
+def route_intent(state: ResearchState) -> str:
+    if state.get("intent") == "greeting":
+        return "end"
+    return "planner"
+
 # --- NODE 1: Planner Agent ---
 def planner_node(state: ResearchState) -> Dict[str, Any]:
     print("\n🧠 [Planner Agent]: Breaking down research query...")
-    user_summary = lt_memory.get_user_memory_summary(state["user_id"])
     
     prompt = f"""You are the Lead Planning Agent for Pakistan Economic & Policy Research.
 User Profile & Past Research Context:
-{user_summary}
+{state.get('user_context', '')}
 
 Research Question: {state['query']}
 
@@ -63,7 +114,7 @@ Respond ONLY in valid JSON list of strings, e.g.:
         plan = [state["query"]]
 
     print(f"  📋 Sub-tasks generated: {plan}")
-    return {"plan": plan, "user_context": user_summary}
+    return {"plan": plan}
 
 # --- NODE 2: Researcher Agent (ReAct Tool Calling) ---
 def researcher_node(state: ResearchState) -> Dict[str, Any]:
@@ -75,7 +126,6 @@ def researcher_node(state: ResearchState) -> Dict[str, Any]:
         hits = retriever.search(subquery, top_k=2)
         collected_chunks.extend(hits)
 
-    # Deduplicate chunks by snippet start
     seen = set()
     unique_chunks = []
     for c in collected_chunks:
@@ -166,7 +216,6 @@ Reply ONLY in valid JSON:
     print(f"  ⚖️ Grounded: {is_grounded} | Feedback: {feedback}")
 
     if is_grounded or retries >= 1:
-        # Save key finding to long-term memory
         lt_memory.save_finding(
             user_id=state["user_id"],
             topic=state["query"][:50],
@@ -185,23 +234,34 @@ Reply ONLY in valid JSON:
             "retry_count": retries + 1
         }
 
-# --- Conditional Edge: Reflection Loop ---
 def should_continue(state: ResearchState) -> str:
     if state["is_grounded"]:
         return "end"
     print("  🔁 Reflection loop triggered: re-synthesizing with fact-checker feedback...")
     return "re_analyze"
 
-# --- 5. Compile the LangGraph ---
+# --- 5. Compile the LangGraph with Supervisor Router ---
 def build_research_graph():
     builder = StateGraph(ResearchState)
 
+    builder.add_node("supervisor", supervisor_router_node)
     builder.add_node("planner", planner_node)
     builder.add_node("researcher", researcher_node)
     builder.add_node("analyst", analyst_node)
     builder.add_node("critic", critic_node)
 
-    builder.set_entry_point("planner")
+    builder.set_entry_point("supervisor")
+
+    # Conditional Routing from Supervisor
+    builder.add_conditional_edges(
+        "supervisor",
+        route_intent,
+        {
+            "end": END,
+            "planner": "planner"
+        }
+    )
+
     builder.add_edge("planner", "researcher")
     builder.add_edge("researcher", "analyst")
     builder.add_edge("analyst", "critic")
@@ -221,17 +281,17 @@ def build_research_graph():
 if __name__ == "__main__":
     graph = build_research_graph()
     test_user = "analyst_qazi_01"
-    test_input = {
-        "user_id": test_user,
-        "query": "How did Pakistan's GDP growth and inflation perform in FY 2024 according to the Economic Survey?",
-        "retry_count": 0
-    }
+    
+    print("🧪 Test 1: Casual greeting 'hi'...")
+    res1 = graph.invoke(
+        {"user_id": test_user, "query": "hi", "retry_count": 0},
+        config={"configurable": {"thread_id": "test_hi"}}
+    )
+    print("Response:", res1["final_response"])
 
-    config = {"configurable": {"thread_id": "session_test_001"}}
-    print(f"🚀 Running End-to-End Multi-Agent Research Assistant for '{test_user}'...")
-    final_output = graph.invoke(test_input, config=config)
-
-    print("\n" + "="*50)
-    print("📄 FINAL GROUNDED RESEARCH REPORT:")
-    print("="*50)
-    print(final_output["final_response"])
+    print("\n🧪 Test 2: Economic research query...")
+    res2 = graph.invoke(
+        {"user_id": test_user, "query": "What was the headline inflation rate in May 2024?", "retry_count": 0},
+        config={"configurable": {"thread_id": "test_inflation"}}
+    )
+    print("Response (excerpt):", res2["final_response"][:200])
