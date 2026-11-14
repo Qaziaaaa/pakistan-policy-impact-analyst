@@ -11,12 +11,12 @@ from dotenv import load_dotenv
 
 from backend.src.agents import build_research_graph
 from backend.src.memory import LongTermMemory
+from backend.src.evaluation import LLMJudge
 
 load_dotenv("backend/.env")
 
 app = FastAPI(title="Pakistan Policy Impact Analyst API")
 
-# Enable CORS for modern frontends
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -27,6 +27,7 @@ app.add_middleware(
 
 graph = build_research_graph()
 memory = LongTermMemory()
+judge = LLMJudge()
 
 class ResearchRequest(BaseModel):
     user_id: str = "analyst_qazi_01"
@@ -53,19 +54,22 @@ async def stream_research(request: ResearchRequest):
         }
         config = {"configurable": {"thread_id": f"session_{request.user_id}"}}
 
-        # Stream node updates in real-time
+        # 1. Status: Planning
         yield json.dumps({
             "type": "status",
             "node": "planner",
             "message": "🧠 Planning research strategy and sub-queries..."
         })
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.3)
 
-        # Run the LangGraph execution in background thread
+        # 2. Run multi-agent LangGraph workflow
         loop = asyncio.get_event_loop()
         final_state = await loop.run_in_executor(None, lambda: graph.invoke(test_input, config=config))
 
-        # Send retrieved evidence citations
+        retrieved_chunks = final_state.get("retrieved_chunks", [])
+        final_report = final_state.get("final_response", "")
+
+        # 3. Stream retrieved evidence chunks
         yield json.dumps({
             "type": "evidence",
             "chunks": [
@@ -75,20 +79,31 @@ async def stream_research(request: ResearchRequest):
                     "page_number": c["page_number"],
                     "snippet": c["content"][:200] + "..."
                 }
-                for c in final_state.get("retrieved_chunks", [])
+                for c in retrieved_chunks
             ]
         })
 
-        # Send final report
+        # 4. Stream Final Report
         yield json.dumps({
             "type": "final",
-            "report": final_state.get("final_response", ""),
+            "report": final_report,
             "critique": final_state.get("critique", "")
+        })
+
+        # 5. Run Live LLM-as-a-Judge Evaluation & Stream Metrics
+        context_str = "\n".join([c["content"] for c in retrieved_chunks])
+        eval_scores = await loop.run_in_executor(
+            None,
+            lambda: judge.evaluate(request.query, context_str, final_report)
+        )
+
+        yield json.dumps({
+            "type": "evaluation",
+            "scores": eval_scores
         })
 
     return EventSourceResponse(event_generator())
 
-# Embedded ultra-sleek UI served directly by FastAPI
 @app.get("/", response_class=HTMLResponse)
 async def serve_dashboard():
     with open("frontend/index.html", "r", encoding="utf-8") as f:
@@ -96,4 +111,4 @@ async def serve_dashboard():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("backend.main:app", host="0.0.0.0", port=5005, reload=False)
