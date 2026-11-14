@@ -54,22 +54,30 @@ async def stream_research(request: ResearchRequest):
         }
         config = {"configurable": {"thread_id": f"session_{request.user_id}"}}
 
-        # 1. Status: Planning
         yield json.dumps({
             "type": "status",
-            "node": "planner",
-            "message": "🧠 Planning research strategy and sub-queries..."
+            "node": "supervisor",
+            "message": "🧭 Routing query & analyzing intent..."
         })
         await asyncio.sleep(0.3)
 
-        # 2. Run multi-agent LangGraph workflow
         loop = asyncio.get_event_loop()
         final_state = await loop.run_in_executor(None, lambda: graph.invoke(test_input, config=config))
 
+        is_non_research = final_state.get("intent") in ("greeting", "off_topic")
         retrieved_chunks = final_state.get("retrieved_chunks", [])
         final_report = final_state.get("final_response", "")
 
-        # 3. Stream retrieved evidence chunks
+        # If it was a greeting or off-topic query, skip RAG evaluation and evidence rendering
+        if is_non_research:
+            yield json.dumps({
+                "type": "final",
+                "report": final_report,
+                "is_greeting": True
+            })
+            return
+
+        # Evidence chunks
         yield json.dumps({
             "type": "evidence",
             "chunks": [
@@ -83,14 +91,15 @@ async def stream_research(request: ResearchRequest):
             ]
         })
 
-        # 4. Stream Final Report
+        # Final Report
         yield json.dumps({
             "type": "final",
             "report": final_report,
+            "is_greeting": False,
             "critique": final_state.get("critique", "")
         })
 
-        # 5. Run Live LLM-as-a-Judge Evaluation & Stream Metrics
+        # Real-time Evaluation
         context_str = "\n".join([c["content"] for c in retrieved_chunks])
         eval_scores = await loop.run_in_executor(
             None,
