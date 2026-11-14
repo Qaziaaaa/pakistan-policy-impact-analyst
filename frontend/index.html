@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pakistan Policy Impact Analyst — AI Research Engine</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              500: '#10b981',
+              600: '#059669',
+              900: '#064e3b',
+            },
+            surface: {
+              900: '#0b0f17',
+              800: '#111827',
+              700: '#1f2937'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <style>
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 0.8; }
+    }
+    .glow-effect {
+      background: radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.15) 0%, transparent 60%);
+    }
+  </style>
+</head>
+<body class="bg-[#0b0f17] text-slate-100 min-h-screen flex flex-col font-sans selection:bg-brand-500 selection:text-white">
+
+  <!-- Glow Background -->
+  <div class="fixed inset-0 glow-effect pointer-events-none"></div>
+
+  <!-- Header -->
+  <header class="border-b border-slate-800/80 backdrop-blur-md sticky top-0 z-50 px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="h-9 w-9 rounded-xl bg-gradient-to-tr from-brand-600 to-emerald-400 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+        <i class="fa-solid fa-scale-balanced text-white text-sm"></i>
+      </div>
+      <div>
+        <h1 class="text-base font-semibold tracking-tight text-white flex items-center gap-2">
+          Pakistan Policy Impact Analyst
+          <span class="text-[11px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Agentic v2</span>
+        </h1>
+        <p class="text-xs text-slate-400">Grounded on Pakistan Economic Survey & SBP Reports</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-4 text-xs">
+      <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300">
+        <span class="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span>Qdrant Cloud & Neon Postgres Active</span>
+      </div>
+      <div class="text-slate-400">User: <span id="userIdBadge" class="text-slate-200 font-mono">analyst_qazi_01</span></div>
+    </div>
+  </header>
+
+  <!-- Main Grid -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-6 grid grid-cols-12 gap-6 relative z-10">
+    
+    <!-- Left Workspace: Query, Execution & Report (8 Cols) -->
+    <div class="col-span-12 lg:col-span-8 flex flex-col gap-6">
+      
+      <!-- Search Input Card -->
+      <div class="p-5 rounded-2xl bg-surface-800/60 border border-slate-800/80 backdrop-blur-xl shadow-xl">
+        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Research Question</label>
+        <div class="relative">
+          <textarea id="queryInput" rows="2" class="w-full bg-surface-900/90 border border-slate-700/80 rounded-xl p-3.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all resize-none" placeholder="e.g. Compare inflation trends and monetary policy response in FY24..."></textarea>
+          <button id="runBtn" onclick="runResearch()" class="absolute right-3 bottom-3 px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-medium text-xs flex items-center gap-2 transition-all shadow-md shadow-emerald-500/25">
+            <i class="fa-solid fa-sparkles"></i>
+            <span>Run Multi-Agent Research</span>
+          </button>
+        </div>
+
+        <!-- Prompt Suggestions -->
+        <div class="flex flex-wrap gap-2 mt-3 text-xs text-slate-400">
+          <span class="text-slate-500">Try:</span>
+          <button onclick="setQuery('How did Pakistan\'s GDP growth and inflation perform in FY 2024?')" class="hover:text-emerald-400 transition-colors bg-slate-800/50 hover:bg-slate-800 px-2.5 py-1 rounded-md border border-slate-700/50">GDP & Inflation FY24</button>
+          <button onclick="setQuery('What drove broad money growth and SBP policy rate decisions in FY24?')" class="hover:text-emerald-400 transition-colors bg-slate-800/50 hover:bg-slate-800 px-2.5 py-1 rounded-md border border-slate-700/50">Money & Credit Trends</button>
+        </div>
+      </div>
+
+      <!-- Agent Trace & Status Bar -->
+      <div id="statusCard" class="hidden p-4 rounded-xl bg-slate-900/90 border border-emerald-500/30 flex items-center gap-3">
+        <i class="fa-solid fa-circle-notch fa-spin text-emerald-400 text-sm"></i>
+        <span id="statusText" class="text-xs text-emerald-300 font-mono">Initializing agents...</span>
+      </div>
+
+      <!-- Final Research Report Card -->
+      <div id="reportContainer" class="hidden p-6 rounded-2xl bg-surface-800/80 border border-slate-800 backdrop-blur-xl shadow-xl flex-1">
+        <div class="flex items-center justify-between pb-4 border-b border-slate-800 mb-4">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-file-shield text-emerald-400"></i>
+            <h2 class="text-sm font-semibold text-white">Grounded Research Briefing</h2>
+          </div>
+          <span id="factCheckBadge" class="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Verified Grounded</span>
+        </div>
+        <div id="reportMarkdown" class="prose prose-invert prose-emerald max-w-none text-sm text-slate-300 leading-relaxed"></div>
+      </div>
+
+    </div>
+
+    <!-- Right Drawer: Evidence Chunks & Long-Term Memory (4 Cols) -->
+    <div class="col-span-12 lg:col-span-4 flex flex-col gap-6">
+
+      <!-- Long-Term Memory Card -->
+      <div class="p-5 rounded-2xl bg-surface-800/60 border border-slate-800/80 backdrop-blur-xl shadow-xl">
+        <div class="flex items-center gap-2 mb-3">
+          <i class="fa-solid fa-database text-blue-400 text-xs"></i>
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-300">Long-Term Memory (Neon Postgres)</h3>
+        </div>
+        <div id="memoryContent" class="text-xs text-slate-400 font-mono bg-surface-900/90 p-3 rounded-xl border border-slate-800 space-y-1">
+          Loading user persona...
+        </div>
+      </div>
+
+      <!-- Retrieved Evidence Drawer -->
+      <div class="p-5 rounded-2xl bg-surface-800/60 border border-slate-800/80 backdrop-blur-xl shadow-xl flex-1 flex flex-col">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-quote-left text-emerald-400 text-xs"></i>
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-300">Retrieved Evidence Chunks</h3>
+          </div>
+          <span id="chunkCount" class="text-[11px] font-mono text-slate-500">0 chunks</span>
+        </div>
+        <div id="evidenceList" class="flex-1 overflow-y-auto space-y-3 max-h-[500px] pr-1">
+          <div class="text-xs text-slate-500 italic p-3 text-center border border-dashed border-slate-800 rounded-xl">
+            Retrieved citations from Qdrant Cloud will appear here.
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <script>
+    const USER_ID = "analyst_qazi_01";
+
+    function setQuery(text) {
+      document.getElementById("queryInput").value = text;
+    }
+
+    // Load Long-Term Memory on Page Load
+    async function loadMemory() {
+      try {
+        const res = await fetch(`/api/memory/${USER_ID}`);
+        const data = await res.json();
+        document.getElementById("memoryContent").innerHTML = `
+          <div><strong class="text-slate-300">Role:</strong> ${data.role}</div>
+          <div><strong class="text-slate-300">Focus:</strong> ${data.preferred_topics}</div>
+        `;
+      } catch (err) {
+        console.error("Failed to load memory", err);
+      }
+    }
+    loadMemory();
+
+    async function runResearch() {
+      const query = document.getElementById("queryInput").value.trim();
+      if (!query) return;
+
+      const runBtn = document.getElementById("runBtn");
+      const statusCard = document.getElementById("statusCard");
+      const statusText = document.getElementById("statusText");
+      const reportContainer = document.getElementById("reportContainer");
+      const reportMarkdown = document.getElementById("reportMarkdown");
+      const evidenceList = document.getElementById("evidenceList");
+      const chunkCount = document.getElementById("chunkCount");
+
+      runBtn.disabled = true;
+      runBtn.classList.add("opacity-50");
+      statusCard.classList.remove("hidden");
+      statusText.innerText = "🚀 Agents activated: Planner decomposing research task...";
+      reportContainer.classList.add("hidden");
+      evidenceList.innerHTML = "";
+
+      try {
+        const response = await fetch("/api/research/stream", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id: USER_ID, query: query })
+        });
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const textChunk = decoder.decode(value);
+          const lines = textChunk.split("\n");
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              const data = JSON.parse(line.substring(6));
+
+              if (data.type === "status") {
+                statusText.innerText = data.message;
+              } else if (data.type === "evidence") {
+                chunkCount.innerText = `${data.chunks.length} chunks`;
+                evidenceList.innerHTML = data.chunks.map((c, i) => `
+                  <div class="p-3 rounded-xl bg-surface-900/90 border border-slate-800 text-xs hover:border-emerald-500/40 transition-all">
+                    <div class="flex items-center justify-between text-emerald-400 font-medium mb-1">
+                      <span>#${i+1} ${c.source}</span>
+                      <span class="text-slate-500 text-[10px]">p. ${c.page_number}</span>
+                    </div>
+                    <div class="text-slate-400 text-[11px] leading-relaxed">${c.snippet}</div>
+                  </div>
+                `).join("");
+              } else if (data.type === "final") {
+                statusCard.classList.add("hidden");
+                reportContainer.classList.remove("hidden");
+                reportMarkdown.innerHTML = marked.parse(data.report);
+                loadMemory(); // Refresh memory to show newly saved fact
+              }
+            }
+          }
+        }
+      } catch (err) {
+        statusText.innerText = "❌ Research failed: " + err.message;
+      } finally {
+        runBtn.disabled = false;
+        runBtn.classList.remove("opacity-50");
+      }
+    }
+  </script>
+</body>
+</html>
