@@ -105,3 +105,4 @@ if __name__ == "__main__":
 
     print(f"\n✅ Total extracted chunks: {len(all_chunks)}")
     print(f"💾 Saved to: {output_file}")
+
