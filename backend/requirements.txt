@@ -1,0 +1,24 @@
+# LangChain & LangGraph
+langgraph>=0.2.0
+langchain>=0.3.0
+langchain-google-genai>=2.0.0
+langchain-community>=0.3.0
+
+# Vector DB & Embeddings
+qdrant-client>=1.11.0
+
+# PDF Extraction & Processing
+pypdf>=5.0.0
+pdfplumber>=0.11.0
+
+# API & Web Framework
+fastapi>=0.115.0
+uvicorn>=0.30.0
+pydantic>=2.9.0
+python-dotenv>=1.0.0
+
+# Observability & Monitoring
+langsmith>=0.1.100
+
+# Evaluation
+ragas>=0.2.0
