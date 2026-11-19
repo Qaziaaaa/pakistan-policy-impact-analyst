@@ -153,7 +153,10 @@ def researcher_node(state: ResearchState) -> Dict[str, Any]:
     print("\n🔍 [Researcher Agent]: Searching Qdrant Cloud knowledge base...")
     collected_chunks = state.get("retrieved_chunks", []) or []
 
-    for subquery in state["plan"]:
+    # Always search the direct user query + planner decomposed subqueries
+    search_queries = [state["query"]] + [p for p in state.get("plan", []) if p != state["query"]]
+
+    for subquery in search_queries:
         print(f"  🔎 Executing retrieval for: '{subquery}'")
         hits = retriever.search(subquery, top_k=5)
         collected_chunks.extend(hits)
