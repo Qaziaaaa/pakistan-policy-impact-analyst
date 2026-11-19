@@ -155,7 +155,7 @@ def researcher_node(state: ResearchState) -> Dict[str, Any]:
 
     for subquery in state["plan"]:
         print(f"  🔎 Executing retrieval for: '{subquery}'")
-        hits = retriever.search(subquery, top_k=2)
+        hits = retriever.search(subquery, top_k=5)
         collected_chunks.extend(hits)
 
     seen = set()

@@ -48,57 +48,78 @@ Base.metadata.create_all(bind=engine)
 
 class LongTermMemory:
     """Helper API for agents to read and persist user context and findings."""
-    def __init__(self):
-        self.db = SessionLocal()
+    def _get_session(self):
+        return SessionLocal()
 
     def get_or_create_user(self, user_id: str, role: str = "Economic Analyst") -> UserProfile:
-        user = self.db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
-        if not user:
-            user = UserProfile(user_id=user_id, role=role)
-            self.db.add(user)
-            self.db.commit()
-            self.db.refresh(user)
-        return user
+        with self._get_session() as db:
+            user = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
+            if not user:
+                user = UserProfile(user_id=user_id, role=role)
+                db.add(user)
+                db.commit()
+                db.refresh(user)
+            return user
 
     def update_user_preferences(self, user_id: str, role: str = None, preferred_topics: str = None):
-        user = self.get_or_create_user(user_id)
-        if role:
-            user.role = role
-        if preferred_topics:
-            user.preferred_topics = preferred_topics
-        self.db.commit()
-        self.db.refresh(user)
-        return user
+        with self._get_session() as db:
+            user = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
+            if not user:
+                user = UserProfile(user_id=user_id, role=role or "Economic Analyst")
+                db.add(user)
+            if role:
+                user.role = role
+            if preferred_topics:
+                user.preferred_topics = preferred_topics
+            db.commit()
+            db.refresh(user)
+            return user
 
     def save_finding(self, user_id: str, topic: str, finding: str, citation: str = ""):
-        self.get_or_create_user(user_id)
-        entry = ResearchFinding(
-            user_id=user_id,
-            topic=topic,
-            finding=finding,
-            citation=citation
-        )
-        self.db.add(entry)
-        self.db.commit()
-        self.db.refresh(entry)
-        return entry
+        with self._get_session() as db:
+            user = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
+            if not user:
+                user = UserProfile(user_id=user_id, role="Economic Analyst")
+                db.add(user)
+                db.commit()
+
+            entry = ResearchFinding(
+                user_id=user_id,
+                topic=topic,
+                finding=finding,
+                citation=citation
+            )
+            db.add(entry)
+            db.commit()
+            db.refresh(entry)
+            return entry
 
     def get_user_memory_summary(self, user_id: str) -> str:
         """Returns a concise summary of user preferences and past findings for LLM context."""
-        user = self.get_or_create_user(user_id)
-        findings = self.db.query(ResearchFinding).filter(
-            ResearchFinding.user_id == user_id
-        ).order_by(ResearchFinding.created_at.desc()).limit(5).all()
+        try:
+            with self._get_session() as db:
+                user = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
+                if not user:
+                    user = UserProfile(user_id=user_id, role="Economic Analyst")
+                    db.add(user)
+                    db.commit()
+                    db.refresh(user)
 
-        summary = f"User Role: {user.role}\nPreferences: {user.preferred_topics}\n"
-        if findings:
-            summary += "Past Saved Insights:\n"
-            for f in findings:
-                summary += f"- [{f.topic}]: {f.finding} (Ref: {f.citation})\n"
-        return summary.strip()
+                findings = db.query(ResearchFinding).filter(
+                    ResearchFinding.user_id == user_id
+                ).order_by(ResearchFinding.created_at.desc()).limit(5).all()
+
+                summary = f"User Role: {user.role}\nPreferences: {user.preferred_topics}\n"
+                if findings:
+                    summary += "Past Saved Insights:\n"
+                    for f in findings:
+                        summary += f"- [{f.topic}]: {f.finding} (Ref: {f.citation})\n"
+                return summary.strip()
+        except Exception as e:
+            return "User Role: Economic Analyst\nPreferences: Pakistan Macroeconomics"
 
     def close(self):
-        self.db.close()
+        pass
 
 if __name__ == "__main__":
     memory = LongTermMemory()
