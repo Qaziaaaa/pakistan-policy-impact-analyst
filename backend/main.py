@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from backend.src.agents import build_research_graph
 from backend.src.memory import LongTermMemory
 from backend.src.evaluation import LLMJudge
+from backend.src.observability import ObservabilityTracker
 
 load_dotenv("backend/.env")
 
@@ -28,6 +29,7 @@ app.add_middleware(
 graph = build_research_graph()
 memory = LongTermMemory()
 judge = LLMJudge()
+tracker = ObservabilityTracker()
 
 class ResearchRequest(BaseModel):
     user_id: str = "analyst_qazi_01"
@@ -47,6 +49,7 @@ async def get_user_memory(user_id: str):
 @app.post("/api/research/stream")
 async def stream_research(request: ResearchRequest):
     async def event_generator() -> AsyncGenerator[str, None]:
+        tracker.reset()
         test_input = {
             "user_id": request.user_id,
             "query": request.query,
@@ -68,12 +71,17 @@ async def stream_research(request: ResearchRequest):
         retrieved_chunks = final_state.get("retrieved_chunks", [])
         final_report = final_state.get("final_response", "")
 
+        # Compute telemetry metrics
+        tracker.end_step("supervisor", input_text=request.query, output_text=final_report)
+        metrics = tracker.get_metrics()
+
         # If it was a greeting or off-topic query, skip RAG evaluation and evidence rendering
         if is_non_research:
             yield json.dumps({
                 "type": "final",
                 "report": final_report,
-                "is_greeting": True
+                "is_greeting": True,
+                "telemetry": metrics
             })
             return
 
@@ -91,12 +99,13 @@ async def stream_research(request: ResearchRequest):
             ]
         })
 
-        # Final Report
+        # Final Report with Telemetry
         yield json.dumps({
             "type": "final",
             "report": final_report,
             "is_greeting": False,
-            "critique": final_state.get("critique", "")
+            "critique": final_state.get("critique", ""),
+            "telemetry": metrics
         })
 
         # Real-time Evaluation

@@ -94,6 +94,22 @@
         <span id="statusText" class="text-xs text-emerald-300 font-mono">Initializing agents...</span>
       </div>
 
+      <!-- Execution Telemetry Bar (Milestone 2: Observability) -->
+      <div id="telemetryCard" class="hidden p-3 rounded-xl bg-surface-800/80 border border-slate-700/60 flex items-center justify-between text-xs font-mono">
+        <div class="flex items-center gap-4 text-slate-300">
+          <span class="flex items-center gap-1.5 text-amber-400">
+            <i class="fa-solid fa-bolt"></i> Latency: <strong id="telLatency" class="text-slate-100 font-bold">0.0s</strong>
+          </span>
+          <span class="flex items-center gap-1.5 text-blue-400">
+            <i class="fa-solid fa-microchip"></i> Tokens: <strong id="telTokens" class="text-slate-100 font-bold">0</strong>
+          </span>
+          <span class="flex items-center gap-1.5 text-emerald-400">
+            <i class="fa-solid fa-receipt"></i> Est. Cost: <strong id="telCost" class="text-slate-100 font-bold">$0.0000</strong>
+          </span>
+        </div>
+        <span class="text-[10px] text-slate-500 uppercase tracking-widest">Hybrid RRF + Observability Active</span>
+      </div>
+
       <!-- Live Evaluation Scorecard (Requirement: Evaluation) -->
       <div id="evalCard" class="hidden p-4 rounded-xl bg-surface-800/90 border border-emerald-500/30 flex flex-col gap-2">
         <div class="flex items-center justify-between text-xs font-semibold text-white border-b border-slate-800 pb-2">
@@ -248,6 +264,13 @@
                 reportContainer.classList.remove("hidden");
                 reportMarkdown.innerHTML = marked.parse(data.report);
                 loadMemory();
+
+                if (data.telemetry) {
+                  document.getElementById("telemetryCard").classList.remove("hidden");
+                  document.getElementById("telLatency").innerText = `${data.telemetry.total_latency_seconds}s`;
+                  document.getElementById("telTokens").innerText = data.telemetry.total_tokens.toLocaleString();
+                  document.getElementById("telCost").innerText = data.telemetry.estimated_cost_usd;
+                }
               } else if (data.type === "evaluation") {
                 evalCard.classList.remove("hidden");
                 document.getElementById("evalOverall").innerText = `Score: ${(data.scores.overall_score * 100).toFixed(0)}%`;
